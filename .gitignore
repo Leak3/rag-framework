@@ -1,0 +1,31 @@
+# Rust build artifacts
+/target/
+Cargo.lock
+**/*.rs.bk
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local configuration
+.env
+.env.local
+*.json.local
+
+# Build outputs
+*.o
+*.a
+*.so
+*.dylib
+
+# Embeddings and data files (too large for version control)
+store.json
+*.db
+*.sqlite

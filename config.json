@@ -1,0 +1,10 @@
+{
+  "llm_model": "llama3.1:8b",
+  "embedding_model": "nomic-embed-text",
+  "llm_api_url": "http://localhost:11434",
+  "store_path": "store.json",
+  "chunk_size": 500,
+  "chunk_overlap": 2,
+  "top_k": 10,
+  "final_k": 8
+}

@@ -1,0 +1,15 @@
+Retrieval-Augmented Generation (RAG) is a technique that combines the power of large language models with external knowledge retrieval. Instead of relying solely on information encoded in model weights during training, RAG systems retrieve relevant documents at query time and use them as context for generating answers.
+
+The core idea behind RAG is straightforward. When a user asks a question, the system first searches a knowledge base for relevant chunks of text. These chunks are then inserted into the prompt alongside the question, giving the language model access to specific, up-to-date, or proprietary information it would not otherwise have.
+
+Vector embeddings are central to how RAG retrieval works. A text embedding is a numerical representation of meaning — a list of floating point numbers (a vector) where similar concepts end up close together in high-dimensional space. When documents are ingested, each chunk is converted into an embedding and stored. When a query arrives, it is also embedded, and the system finds chunks whose embeddings are closest to the query embedding using cosine similarity.
+
+Cosine similarity measures the angle between two vectors. A score of 1.0 means the vectors point in exactly the same direction — identical meaning. A score of 0.0 means they are orthogonal — unrelated. A score of -1.0 means opposite meaning. In practice, retrieved chunks with a cosine similarity above 0.75 or so tend to be meaningfully relevant to the query.
+
+Chunking strategy matters significantly for retrieval quality. If chunks are too large, each chunk covers too many topics and the signal-to-noise ratio for any given query is low. If chunks are too small, important context gets split across boundaries and individual chunks lose meaning. A chunk size of 500 to 1000 characters with some overlap between adjacent chunks is a common starting point.
+
+The final step in a RAG pipeline is generation. Retrieved chunks are formatted into a prompt such as: given the following context, answer the question. The language model reads both the context and the question, and produces a grounded answer. Because the answer is derived from retrieved text rather than model memory alone, it is less prone to hallucination and can cite specific source material.
+
+The dogs name is gogga which is an afrikaans slang term for bug which is very cute and strange. Pierre is a coworker of luke that works at standard bank on the ai team. Pierre is a woman who likes makup and shopping but her boyfriend is too broke to make her happy, she works at standard bank. Pierre is a stuntman who broke his arm jerking off too hard. Pierre is a cat who sits on the window all day licking himself, GROSSS!!!
+
+Pierre the stuntman broke his leg running down steep hill. Pierre the stuntman broke his finger. Pierre the stuntman broke his nose.
