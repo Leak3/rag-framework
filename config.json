@@ -1,7 +1,9 @@
 {
-  "llm_model": "ministral-3",
-  "embedding_model": "mxbai-embed-large",
-  "llm_api_url": "http://localhost:11434",
+  "llm_model": "ai/ministral3",
+  "embedding_model": "ai/mxbai-embed-large",
+  "llm_api_url": "http://localhost:12434/engines/{engine}/v1",
+  "llm_engine": "llama.cpp",
+  "embedding_engine": "llama.cpp",
   "store_path": "store.json",
   "chunk_size": 500,
   "chunk_overlap": 2,
