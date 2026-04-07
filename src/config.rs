@@ -82,3 +82,65 @@ fn expand_url_template(
         .trim_end_matches('/')
         .to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_config_from_json() {
+        let json = r#"
+        {
+          "models": {
+            "llm_model": "ai/ministral3",
+            "embedding_model": "ai/mxbai-embed-large",
+            "api_url": "http://localhost:12434/engines/{engine}/v1",
+            "engine": "llama.cpp",
+            "chunking_model": "ai/ministral3"
+          },
+          "chunking": {
+            "chunk_size": 500,
+            "chunk_overlap": 2,
+            "smart": true,
+            "smart_max_chars": 4000
+          },
+          "retrieval": {
+            "top_k": 10,
+            "final_k": 8
+          },
+          "storage": {
+            "store_path": "store.json"
+          }
+        }
+        "#;
+
+        let cfg: Config = serde_json::from_str(json).expect("config should parse");
+        assert_eq!(cfg.models.llm_model, "ai/ministral3");
+        assert_eq!(cfg.models.embedding_model, "ai/mxbai-embed-large");
+        assert_eq!(cfg.models.engine.as_deref(), Some("llama.cpp"));
+        assert_eq!(cfg.chunking.chunk_size, 500);
+        assert!(cfg.chunking.smart);
+        assert_eq!(cfg.retrieval.top_k, 10);
+        assert_eq!(cfg.storage.store_path, "store.json");
+    }
+
+    #[test]
+    fn expands_url_template_for_chat_and_embeddings() {
+        let models = ModelsConfig {
+            llm_model: "ai/ministral3".to_string(),
+            embedding_model: "ai/mxbai-embed-large".to_string(),
+            api_url: "http://localhost:12434/engines/{engine}/v1".to_string(),
+            engine: Some("llama.cpp".to_string()),
+            chunking_model: None,
+        };
+
+        assert_eq!(
+            models.chat_base_url(),
+            "http://localhost:12434/engines/llama.cpp/v1"
+        );
+        assert_eq!(
+            models.embeddings_base_url(),
+            "http://localhost:12434/engines/llama.cpp/v1"
+        );
+    }
+}

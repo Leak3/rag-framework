@@ -106,3 +106,42 @@ fn tokenize(text: &str) -> HashMap<String, usize> {
 
     map
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn add_and_delete_by_source() {
+        let mut store = VectorStore::new();
+        store.add("hello world".to_string(), vec![0.0, 1.0], "a.txt");
+        store.add("another doc".to_string(), vec![1.0, 0.0], "b.txt");
+        store.add("more from a".to_string(), vec![0.2, 0.3], "a.txt");
+
+        assert_eq!(store.documents.len(), 3);
+        store.delete_by_source("a.txt");
+        assert_eq!(store.documents.len(), 1);
+        assert_eq!(store.documents[0].source, "b.txt");
+    }
+
+    #[test]
+    fn save_and_load_round_trip() {
+        let mut store = VectorStore::new();
+        store.add("hello world".to_string(), vec![0.0, 1.0], "a.txt");
+
+        let mut path = std::env::temp_dir();
+        path.push(format!("rag-framework-store-test-{}.json", std::process::id()));
+        let path_str = path.to_string_lossy().to_string();
+
+        store.save(&path_str);
+        let loaded = VectorStore::load(&path_str);
+
+        // Clean up best-effort.
+        let _ = std::fs::remove_file(&path);
+
+        assert_eq!(loaded.documents.len(), 1);
+        assert_eq!(loaded.documents[0].source, "a.txt");
+        assert_eq!(loaded.documents[0].text, "hello world");
+        assert_eq!(loaded.documents[0].embedding, vec![0.0, 1.0]);
+    }
+}
