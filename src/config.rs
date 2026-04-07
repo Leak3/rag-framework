@@ -1,17 +1,41 @@
 #[derive(serde::Deserialize)]
 pub struct Config {
+    pub models: ModelsConfig,
+    pub chunking: ChunkingConfig,
+    pub retrieval: RetrievalConfig,
+    pub storage: StorageConfig,
+}
+
+#[derive(serde::Deserialize)]
+pub struct ModelsConfig {
     pub llm_model: String,
-    pub llm_api_url: String,
+    pub api_url: String,
     #[serde(default)]
-    pub llm_engine: Option<String>,
+    pub engine: Option<String>,
     pub embedding_model: String,
     #[serde(default)]
-    pub embedding_engine: Option<String>,
-    pub store_path: String,
+    pub chunking_model: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+pub struct ChunkingConfig {
     pub chunk_size: usize,
     pub chunk_overlap: usize,
+    #[serde(default)]
+    pub smart: bool,
+    #[serde(default)]
+    pub smart_max_chars: Option<usize>,
+}
+
+#[derive(serde::Deserialize)]
+pub struct RetrievalConfig {
     pub top_k: usize,
     pub final_k: usize,
+}
+
+#[derive(serde::Deserialize)]
+pub struct StorageConfig {
+    pub store_path: String,
 }
 
 pub fn load_config() -> Config {
@@ -19,11 +43,11 @@ pub fn load_config() -> Config {
     serde_json::from_str(&config_str).expect("Failed to parse config.json")
 }
 
-impl Config {
+impl ModelsConfig {
     pub fn chat_base_url(&self) -> String {
-        let engine = self.llm_engine.as_deref().unwrap_or("llama.cpp");
+        let engine = self.engine.as_deref().unwrap_or("llama.cpp");
         expand_url_template(
-            &self.llm_api_url,
+            &self.api_url,
             &self.llm_model,
             &self.embedding_model,
             &self.llm_model,
@@ -32,13 +56,9 @@ impl Config {
     }
 
     pub fn embeddings_base_url(&self) -> String {
-        let engine = self.embedding_engine.as_deref().unwrap_or_else(|| {
-            self.llm_engine
-                .as_deref()
-                .unwrap_or("llama.cpp")
-        });
+        let engine = self.engine.as_deref().unwrap_or("llama.cpp");
         expand_url_template(
-            &self.llm_api_url,
+            &self.api_url,
             &self.llm_model,
             &self.embedding_model,
             &self.embedding_model,

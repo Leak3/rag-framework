@@ -25,7 +25,7 @@ pub async fn delete(
 ) -> axum::Json<DeleteResponse> {
     println!("[delete] removing source: {}", source);
     state.store.write().await.delete_by_source(&source);
-    state.store.read().await.save(&state.config.store_path);
+    state.store.read().await.save(&state.config.storage.store_path);
     println!("[delete] done");
 
     axum::Json(DeleteResponse { success: true })

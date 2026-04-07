@@ -52,7 +52,7 @@ pub async fn upload(
             String::from_utf8_lossy(&upload_req.file).to_string()
         };
 
-        let field_chunks = crate::ingest::chunker::chunk_text(&text, state.config.chunk_size, state.config.chunk_overlap);
+        let field_chunks = crate::ingest::chunker::chunk_text_smart_or_fallback(&state.config, &text).await;
         println!("[upload] {} chunks generated", field_chunks.len());
 
         for (i, chunk) in field_chunks.into_iter().enumerate() {
@@ -64,7 +64,7 @@ pub async fn upload(
     }
 
     println!("[upload] saving store");
-    state.store.read().await.save(&state.config.store_path);
+    state.store.read().await.save(&state.config.storage.store_path);
 
     Ok(axum::Json(UploadResponse {
         chunk_count: chunks.len(),

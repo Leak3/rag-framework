@@ -42,8 +42,8 @@ pub async fn query(
 }
 
 async fn hybrid_search(state: &AppState, question: &str, query_embedding: &[f32]) -> Vec<String> {
-    let top_k = state.config.top_k;
-    let final_k = state.config.final_k;
+    let top_k = state.config.retrieval.top_k;
+    let final_k = state.config.retrieval.final_k;
 
     let vector_rank = state.store.read().await.vector_search(query_embedding, top_k);
     let bm25_rank = state.store.read().await.bm25_search(question, top_k);

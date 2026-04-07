@@ -42,7 +42,7 @@ pub struct AppState {
 #[tokio::main]
 async fn main() {
     let config = config::load_config();
-    let store = RwLock::new(store::VectorStore::load(&config.store_path));
+    let store = RwLock::new(store::VectorStore::load(&config.storage.store_path));
 
     let state = Arc::new(AppState { store, config });
 

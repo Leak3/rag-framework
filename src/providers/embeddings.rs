@@ -16,9 +16,9 @@ struct EmbedData {
 
 pub async fn embed(config: &crate::config::Config, text: &str) -> Result<Vec<f32>, crate::error::Error> {
     let client = reqwest::Client::new();
-    let base_url = config.embeddings_base_url();
+    let base_url = config.models.embeddings_base_url();
     let request_body = EmbedRequest {
-        model: config.embedding_model.clone(),
+        model: config.models.embedding_model.clone(),
         input: vec![text.to_string()],
     };
 

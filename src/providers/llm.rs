@@ -21,18 +21,19 @@ struct Choice {
     message: Message,
 }
 
-pub async fn ask(config: &crate::config::Config, prompt: String) -> Result<String, crate::error::Error> {
+async fn chat(
+    config: &crate::config::Config,
+    model: &str,
+    messages: Vec<Message>,
+) -> Result<String, crate::error::Error> {
     let client = reqwest::Client::new();
-    let base_url = config.chat_base_url();
+    let base_url = config.models.chat_base_url();
 
     let response = client
         .post(format!("{}/chat/completions", base_url))
         .json(&ChatRequest {
-            model: config.llm_model.clone(),
-            messages: vec![Message {
-                role: "user".to_string(),
-                content: prompt,
-            }],
+            model: model.to_string(),
+            messages,
             stream: false,
         })
         .send()
@@ -45,4 +46,39 @@ pub async fn ask(config: &crate::config::Config, prompt: String) -> Result<Strin
         .next()
         .map(|c| c.message.content)
         .ok_or_else(|| crate::error::Error::new(500, "empty chat response"))
+}
+
+pub async fn ask(config: &crate::config::Config, prompt: String) -> Result<String, crate::error::Error> {
+    chat(
+        config,
+        &config.models.llm_model,
+        vec![Message {
+            role: "user".to_string(),
+            content: prompt,
+        }],
+    )
+    .await
+}
+
+pub async fn ask_with_model(
+    config: &crate::config::Config,
+    model: &str,
+    system_prompt: &str,
+    user_prompt: &str,
+) -> Result<String, crate::error::Error> {
+    chat(
+        config,
+        model,
+        vec![
+            Message {
+                role: "system".to_string(),
+                content: system_prompt.to_string(),
+            },
+            Message {
+                role: "user".to_string(),
+                content: user_prompt.to_string(),
+            },
+        ],
+    )
+    .await
 }
