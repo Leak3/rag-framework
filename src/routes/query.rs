@@ -5,16 +5,27 @@ use std::collections::HashMap;
 use crate::AppState;
 
 #[derive(serde::Deserialize)]
+#[derive(utoipa::ToSchema)]
 pub struct QueryRequest {
     question: String,
 }
 
 #[derive(serde::Serialize)]
+#[derive(utoipa::ToSchema)]
 pub struct QueryResponse {
     answer: String,
     sources: Vec<String>,
 }
 
+#[utoipa::path(
+    post,
+    path = "/query",
+    request_body = QueryRequest,
+    responses(
+        (status = 200, description = "Answer question with RAG", body = QueryResponse),
+        (status = 500, description = "Internal error", body = crate::error::Error)
+    )
+)]
 pub async fn query(
     State(state): State<Arc<AppState>>,
     axum::Json(payload): axum::Json<QueryRequest>,

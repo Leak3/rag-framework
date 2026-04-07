@@ -2,6 +2,7 @@ use axum::response::{IntoResponse, Response};
 use axum::http::StatusCode;
 
 #[derive(serde::Serialize)]
+#[derive(utoipa::ToSchema)]
 pub struct Error{
     code: u16,
     message: String,

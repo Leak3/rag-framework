@@ -1,5 +1,5 @@
 [package]
-name = "rag"
+name = "rag-framework"
 version = "0.1.0"
 edition = "2024"
 
@@ -10,3 +10,5 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 lopdf = "0.39.0"
+utoipa = { version = "5", features = ["axum_extras"] }
+utoipa-swagger-ui = { version = "9", features = ["axum"] }
