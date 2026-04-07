@@ -9,15 +9,16 @@ struct EmbedResponse {
     embeddings: Vec<Vec<f32>>,
 }
 
-pub async fn embed(text: &str) -> Result<Vec<f32>, crate::error::Error> {
+pub async fn embed(config: &crate::config::Config, text: &str) -> Result<Vec<f32>, crate::error::Error> {
     let client = reqwest::Client::new();
+    let base_url = config.llm_api_url.trim_end_matches('/');
     let request_body = EmbedRequest {
-        model: "nomic-embed-text".to_string(),
+        model: config.embedding_model.clone(),
         input: text.to_string(),
     };
 
     let response = client
-        .post("http://localhost:11434/api/embed")
+        .post(format!("{}/api/embed", base_url))
         .json(&request_body)
         .send()
         .await?;

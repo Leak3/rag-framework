@@ -21,10 +21,10 @@ pub async fn query(
 ) -> Result<axum::Json<QueryResponse>, crate::error::Error> {
     println!("[query] question: {}", payload.question);
 
-    let query_embedding = crate::providers::embeddings::embed(&payload.question).await?;
+    let query_embedding = crate::providers::embeddings::embed(&state.config, &payload.question).await?;
     let chunks = hybrid_search(&state, &payload.question, &query_embedding).await;
     let prompt = build_prompt(&chunks.join("\n\n"), &payload.question);
-    let answer = crate::providers::llm::ask(prompt).await?;
+    let answer = crate::providers::llm::ask(&state.config, prompt).await?;
 
     println!("[query] done");
     Ok(axum::Json(QueryResponse { answer, sources: chunks }))

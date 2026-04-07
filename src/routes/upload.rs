@@ -31,7 +31,7 @@ pub async fn upload(
         println!("[upload] {} chunks generated", field_chunks.len());
 
         for (i, chunk) in field_chunks.into_iter().enumerate() {
-            let embedding = crate::providers::embeddings::embed(&chunk).await?;
+            let embedding = crate::providers::embeddings::embed(&state.config, &chunk).await?;
             chunks.push(chunk.clone());
             state.store.write().await.add(chunk, embedding, &file_name);
             println!("[upload] embedded chunk {}", i + 1);

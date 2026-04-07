@@ -16,13 +16,14 @@ struct ChatResponse {
     message: Message,
 }
 
-pub async fn ask(prompt: String) -> Result<String, crate::error::Error> {
+pub async fn ask(config: &crate::config::Config, prompt: String) -> Result<String, crate::error::Error> {
     let client = reqwest::Client::new();
+    let base_url = config.llm_api_url.trim_end_matches('/');
 
     let response = client
-        .post("http://localhost:11434/api/chat")
+        .post(format!("{}/api/chat", base_url))
         .json(&ChatRequest {
-            model: "llama3.1:8b".to_string(),
+            model: config.llm_model.clone(),
             messages: vec![Message {
                 role: "user".to_string(),
                 content: prompt,
