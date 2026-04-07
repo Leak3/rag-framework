@@ -9,7 +9,7 @@
   "chunking": {
     "chunk_size": 500,
     "chunk_overlap": 2,
-    "smart": false,
+    "smart": true,
     "smart_max_chars": 4000
   },
   "retrieval": {
