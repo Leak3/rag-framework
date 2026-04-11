@@ -4,6 +4,7 @@ use axum::{
 };
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tower_http::cors::CorsLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -52,4 +53,5 @@ pub fn build_app(state: Arc<AppState>) -> Router {
         .route("/delete/{source}", delete(routes::delete::delete))
         .merge(SwaggerUi::new("/swagger").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .with_state(state)
+        .layer(CorsLayer::permissive())
 }
