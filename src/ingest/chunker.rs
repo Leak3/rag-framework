@@ -1,4 +1,15 @@
-pub fn chunk_text(text: &str, chunk_size: usize, overlap_sentences: usize) -> Vec<String> {
+#[derive(serde::Deserialize)]
+struct SmartChunkResponse {
+    chunks: Vec<SmartChunk>,
+}
+
+#[derive(serde::Deserialize)]
+struct SmartChunk {
+    start: usize,
+    end: usize,
+}
+
+pub fn chunk_by_sentences(text: &str, chunk_size: usize, overlap_sentences: usize) -> Vec<String> {
     let sentences: Vec<&str> = text.split_inclusive(|c| c == '.' || c == '!' || c == '?').collect();
     let mut current_chunk: Vec<&str> = Vec::new();
     let mut chunks: Vec<String> = Vec::new();
@@ -21,18 +32,136 @@ pub fn chunk_text(text: &str, chunk_size: usize, overlap_sentences: usize) -> Ve
     chunks
 }
 
-#[derive(serde::Deserialize)]
-struct SmartChunkResponse {
-    chunks: Vec<SmartChunk>,
+pub async fn chunk_document(
+    config: &crate::config::Config,
+    text: &str,
+) -> Vec<String> {
+    let fallback = || chunk_by_sentences(text, config.chunking.chunk_size, config.chunking.chunk_overlap);
+
+    if !config.chunking.smart {
+        println!("[chunking] smart_chunking disabled; using programmatic chunking");
+        return fallback();
+    }
+    if !has_semantic_boundaries(text) {
+        println!("[chunking] no clear boundaries detected; using programmatic chunking");
+        return fallback();
+    }
+
+    let max_chars = config.chunking.smart_max_chars.unwrap_or(4000);
+    let model = config
+        .models
+        .chunking_model
+        .as_deref()
+        .unwrap_or(&config.models.llm_model);
+
+    println!(
+        "[chunking] attempting smart chunking (model={}, max_chars={})",
+        model, max_chars
+    );
+
+    let system = "You split documents into retrieval chunks.\n\
+Return ONLY valid JSON and do not wrap it in markdown.\n\
+Rules:\n\
+- Output schema exactly: {\"chunks\":[{\"start\":0,\"end\":123}]}\n\
+- \"start\" and \"end\" are CHARACTER indices into the input text (0-based, end is exclusive).\n\
+- Chunks must cover the entire input contiguously: first chunk start=0, each next chunk start equals previous end, last chunk end equals total character count.\n\
+- Prefer splitting on headings, paragraph breaks, and list boundaries.\n\
+- Chunks must be contiguous and there should be no overlap between chunks.\n\
+- Each chunk must be <= MAX_CHARS characters.\n\
+- If the document has no clear boundaries, return {\"chunks\":[]}.\n";
+
+    let user = format!(
+        "MAX_CHARS={}\n\nINPUT:\n<<<\n{}\n>>>",
+        max_chars, text
+    );
+
+    let llm_out_1 = match crate::providers::llm::ask_with_model(config, model, system, &user).await {
+        Ok(s) => s,
+        Err(e) => {
+            println!("[chunking] smart chunking failed (llm error: {:?}); falling back", e);
+            return fallback();
+        }
+    };
+
+    let parsed: SmartChunkResponse = match extract_json_object(&llm_out_1).and_then(|json| {
+        serde_json::from_str(&json).ok()
+    }) {
+        Some(p) => p,
+        None => {
+            println!(
+                "[chunking] smart chunking invalid JSON (attempt 1). model_output_snippet=\"{}\"",
+                truncate_for_log(&llm_out_1, 220)
+            );
+
+            let system_retry = "Return ONLY valid JSON. No explanation, no markdown.\n\
+Output schema exactly: {\"chunks\":[{\"start\":0,\"end\":123}]}\n\
+\"start\" and \"end\" are CHARACTER indices (0-based, end exclusive).\n\
+Chunks must cover the input contiguously (no gaps/overlap) and cover the full document.\n\
+Your response MUST start with '{' and end with '}'.\n";
+
+            let llm_out_2 =
+                match crate::providers::llm::ask_with_model(config, model, system_retry, &user).await {
+                    Ok(s) => s,
+                    Err(e) => {
+                        println!(
+                            "[chunking] smart chunking retry failed (llm error: {:?}); falling back",
+                            e
+                        );
+                        return fallback();
+                    }
+                };
+
+            match extract_json_object(&llm_out_2).and_then(|json| serde_json::from_str(&json).ok())
+            {
+                Some(p) => p,
+                None => {
+                    println!(
+                        "[chunking] smart chunking invalid JSON (attempt 2). model_output_snippet=\"{}\"; falling back",
+                        truncate_for_log(&llm_out_2, 220)
+                    );
+                    return fallback();
+                }
+            }
+        }
+    };
+
+    let chunks: Vec<String> = match apply_smart_chunk_ranges(text, &parsed.chunks, max_chars) {
+        Ok(c) => c,
+        Err(reason) => {
+            println!(
+                "[chunking] smart chunking output rejected by validation ({}); falling back",
+                reason
+            );
+            return fallback();
+        }
+    };
+
+    if !validate_smart_chunks(text, &chunks, max_chars) {
+        println!("[chunking] smart chunking output rejected by validation; falling back");
+        return fallback();
+    }
+    println!("[chunking] smart chunking succeeded ({} chunks)", chunks.len());
+    chunks
 }
 
-#[derive(serde::Deserialize)]
-struct SmartChunk {
-    start: usize,
-    end: usize,
+fn has_semantic_boundaries(text: &str) -> bool {
+    let newline_count = text.matches('\n').count();
+    if newline_count < 8 {
+        return false;
+    }
+    let has_heading = text.contains("\n#")
+        || text.contains("\n##")
+        || text.contains("\n###")
+        || text.contains("\n====")
+        || text.contains("\n----");
+    let has_lists = text.contains("\n- ")
+        || text.contains("\n* ")
+        || text.contains("\n1. ")
+        || text.contains("\n2. ");
+    has_heading || has_lists
 }
 
-fn one_line_snippet(s: &str, max_len: usize) -> String {
+fn truncate_for_log(s: &str, max_len: usize) -> String {
     let mut t = s
         .replace("\r\n", "\n")
         .replace('\r', "\n")
@@ -70,23 +199,6 @@ fn extract_json_object(s: &str) -> Option<String> {
         return None;
     }
     Some(t[start..=end].to_string())
-}
-
-fn looks_structured(text: &str) -> bool {
-    let newline_count = text.matches('\n').count();
-    if newline_count < 8 {
-        return false;
-    }
-    let has_heading = text.contains("\n#")
-        || text.contains("\n##")
-        || text.contains("\n###")
-        || text.contains("\n====")
-        || text.contains("\n----");
-    let has_lists = text.contains("\n- ")
-        || text.contains("\n* ")
-        || text.contains("\n1. ")
-        || text.contains("\n2. ");
-    has_heading || has_lists
 }
 
 fn validate_smart_chunks(original: &str, chunks: &[String], max_chars: usize) -> bool {
@@ -128,7 +240,7 @@ fn char_to_byte_index(s: &str, char_index: usize) -> Option<usize> {
         })
 }
 
-fn ranges_to_chunks(text: &str, ranges: &[SmartChunk], max_chars: usize) -> Result<Vec<String>, &'static str> {
+fn apply_smart_chunk_ranges(text: &str, ranges: &[SmartChunk], max_chars: usize) -> Result<Vec<String>, &'static str> {
     if ranges.is_empty() {
         return Err("empty ranges");
     }
@@ -196,118 +308,6 @@ fn ranges_to_chunks(text: &str, ranges: &[SmartChunk], max_chars: usize) -> Resu
     Ok(out)
 }
 
-pub async fn chunk_text_smart_or_fallback(
-    config: &crate::config::Config,
-    text: &str,
-) -> Vec<String> {
-    let fallback = || chunk_text(text, config.chunking.chunk_size, config.chunking.chunk_overlap);
-
-    if !config.chunking.smart {
-        println!("[chunking] smart_chunking disabled; using programmatic chunking");
-        return fallback();
-    }
-    if !looks_structured(text) {
-        println!("[chunking] no clear boundaries detected; using programmatic chunking");
-        return fallback();
-    }
-
-    let max_chars = config.chunking.smart_max_chars.unwrap_or(4000);
-    let model = config
-        .models
-        .chunking_model
-        .as_deref()
-        .unwrap_or(&config.models.llm_model);
-
-    println!(
-        "[chunking] attempting smart chunking (model={}, max_chars={})",
-        model, max_chars
-    );
-
-    let system = "You split documents into retrieval chunks.\n\
-Return ONLY valid JSON and do not wrap it in markdown.\n\
-Rules:\n\
-- Output schema exactly: {\"chunks\":[{\"start\":0,\"end\":123}]}\n\
-- \"start\" and \"end\" are CHARACTER indices into the input text (0-based, end is exclusive).\n\
-- Chunks must cover the entire input contiguously: first chunk start=0, each next chunk start equals previous end, last chunk end equals total character count.\n\
-- Prefer splitting on headings, paragraph breaks, and list boundaries.\n\
-- Chunks must be contiguous and there should be no overlap between chunks.\n\
-- Each chunk must be <= MAX_CHARS characters.\n\
-- If the document has no clear boundaries, return {\"chunks\":[]}.\n";
-
-    let user = format!(
-        "MAX_CHARS={}\n\nINPUT:\n<<<\n{}\n>>>",
-        max_chars, text
-    );
-
-    let llm_out_1 = match crate::providers::llm::ask_with_model(config, model, system, &user).await {
-        Ok(s) => s,
-        Err(e) => {
-            println!("[chunking] smart chunking failed (llm error: {:?}); falling back", e);
-            return fallback();
-        }
-    };
-
-    let parsed: SmartChunkResponse = match extract_json_object(&llm_out_1).and_then(|json| {
-        serde_json::from_str(&json).ok()
-    }) {
-        Some(p) => p,
-        None => {
-            println!(
-                "[chunking] smart chunking invalid JSON (attempt 1). model_output_snippet=\"{}\"",
-                one_line_snippet(&llm_out_1, 220)
-            );
-
-            let system_retry = "Return ONLY valid JSON. No explanation, no markdown.\n\
-Output schema exactly: {\"chunks\":[{\"start\":0,\"end\":123}]}\n\
-\"start\" and \"end\" are CHARACTER indices (0-based, end exclusive).\n\
-Chunks must cover the input contiguously (no gaps/overlap) and cover the full document.\n\
-Your response MUST start with '{' and end with '}'.\n";
-
-            let llm_out_2 =
-                match crate::providers::llm::ask_with_model(config, model, system_retry, &user).await {
-                    Ok(s) => s,
-                    Err(e) => {
-                        println!(
-                            "[chunking] smart chunking retry failed (llm error: {:?}); falling back",
-                            e
-                        );
-                        return fallback();
-                    }
-                };
-
-            match extract_json_object(&llm_out_2).and_then(|json| serde_json::from_str(&json).ok())
-            {
-                Some(p) => p,
-                None => {
-                    println!(
-                        "[chunking] smart chunking invalid JSON (attempt 2). model_output_snippet=\"{}\"; falling back",
-                        one_line_snippet(&llm_out_2, 220)
-                    );
-                    return fallback();
-                }
-            }
-        }
-    };
-
-    let chunks: Vec<String> = match ranges_to_chunks(text, &parsed.chunks, max_chars) {
-        Ok(c) => c,
-        Err(reason) => {
-            println!(
-                "[chunking] smart chunking output rejected by validation ({}); falling back",
-                reason
-            );
-            return fallback();
-        }
-    };
-
-    if !validate_smart_chunks(text, &chunks, max_chars) {
-        println!("[chunking] smart chunking output rejected by validation; falling back");
-        return fallback();
-    }
-    println!("[chunking] smart chunking succeeded ({} chunks)", chunks.len());
-    chunks
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -317,7 +317,7 @@ mod tests {
         let text = "A\n\nB";
         // Gap is two newlines (whitespace). Model might skip them.
         let ranges = vec![SmartChunk { start: 0, end: 1 }, SmartChunk { start: 3, end: 4 }];
-        let chunks = ranges_to_chunks(text, &ranges, 10).expect("should accept whitespace gap");
+        let chunks = apply_smart_chunk_ranges(text, &ranges, 10).expect("should accept whitespace gap");
         assert_eq!(chunks, vec!["A".to_string(), "\n\nB".to_string()]);
     }
 
@@ -326,7 +326,7 @@ mod tests {
         let text = "A x B";
         // Gap includes " x " (non-whitespace after trimming), should be rejected.
         let ranges = vec![SmartChunk { start: 0, end: 1 }, SmartChunk { start: 4, end: 5 }];
-        let err = ranges_to_chunks(text, &ranges, 10).unwrap_err();
+        let err = apply_smart_chunk_ranges(text, &ranges, 10).unwrap_err();
         assert_eq!(err, "non-whitespace gap between ranges");
     }
 
@@ -335,7 +335,7 @@ mod tests {
         let text = "Hello\nWorld";
         // Only covers "Hello" (0..5), tail is "\nWorld" and should be appended.
         let ranges = vec![SmartChunk { start: 0, end: 5 }];
-        let chunks = ranges_to_chunks(text, &ranges, 4000).expect("should append tail");
+        let chunks = apply_smart_chunk_ranges(text, &ranges, 4000).expect("should append tail");
         assert_eq!(chunks.len(), 2);
         assert_eq!(chunks[0], "Hello");
         assert_eq!(chunks[1], "\nWorld");

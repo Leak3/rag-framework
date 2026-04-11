@@ -31,13 +31,6 @@ impl VectorStore {
     }
 
     pub fn vector_search(&self, query_embedding: &[f32], top_k: usize) -> Vec<String> {
-        fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-            let dot: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
-            let mag_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-            let mag_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
-            dot / (mag_a * mag_b)
-        }
-
         let mut results: Vec<(f32, &Document)> = self.documents.iter()
             .map(|doc| (cosine_similarity(query_embedding, &doc.embedding), doc))
             .collect();
@@ -71,7 +64,7 @@ impl VectorStore {
     }
 
     pub fn save(&self, path: &str) {
-        let json =serde_json::to_string(self).unwrap(); 
+        let json = serde_json::to_string(self).unwrap();
         std::fs::write(path, json).unwrap();
     }
 
@@ -81,8 +74,7 @@ impl VectorStore {
         }
 
         let json = std::fs::read_to_string(path).unwrap();
-        let store: VectorStore = serde_json::from_str(&json).unwrap();
-        store
+        serde_json::from_str(&json).unwrap()
     }
 
     fn generate_doc_frequencies(&mut self) {
@@ -93,6 +85,13 @@ impl VectorStore {
             }
         }
     }
+}
+
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+    let dot: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+    let mag_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
+    let mag_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
+    dot / (mag_a * mag_b)
 }
 
 fn tokenize(text: &str) -> HashMap<String, usize> {
@@ -136,9 +135,7 @@ mod tests {
         store.save(&path_str);
         let loaded = VectorStore::load(&path_str);
 
-        // Clean up best-effort.
-        let _ = std::fs::remove_file(&path);
-
+        let _ = std::fs::remove_file(&path); // don't fail the test if cleanup fails
         assert_eq!(loaded.documents.len(), 1);
         assert_eq!(loaded.documents[0].source, "a.txt");
         assert_eq!(loaded.documents[0].text, "hello world");

@@ -21,33 +21,6 @@ struct Choice {
     message: Message,
 }
 
-async fn chat(
-    config: &crate::config::Config,
-    model: &str,
-    messages: Vec<Message>,
-) -> Result<String, crate::error::Error> {
-    let client = reqwest::Client::new();
-    let base_url = config.models.chat_base_url();
-
-    let response = client
-        .post(format!("{}/chat/completions", base_url))
-        .json(&ChatRequest {
-            model: model.to_string(),
-            messages,
-            stream: false,
-        })
-        .send()
-        .await?;
-
-    let chat_response: ChatResponse = response.json().await?;
-    chat_response
-        .choices
-        .into_iter()
-        .next()
-        .map(|c| c.message.content)
-        .ok_or_else(|| crate::error::Error::new(500, "empty chat response"))
-}
-
 pub async fn ask(config: &crate::config::Config, prompt: String) -> Result<String, crate::error::Error> {
     chat(
         config,
@@ -81,4 +54,31 @@ pub async fn ask_with_model(
         ],
     )
     .await
+}
+
+async fn chat(
+    config: &crate::config::Config,
+    model: &str,
+    messages: Vec<Message>,
+) -> Result<String, crate::error::Error> {
+    let client = reqwest::Client::new();
+    let base_url = config.models.chat_base_url();
+
+    let response = client
+        .post(format!("{}/chat/completions", base_url))
+        .json(&ChatRequest {
+            model: model.to_string(),
+            messages,
+            stream: false,
+        })
+        .send()
+        .await?;
+
+    let chat_response: ChatResponse = response.json().await?;
+    chat_response
+        .choices
+        .into_iter()
+        .next()
+        .map(|c| c.message.content)
+        .ok_or_else(|| crate::error::Error::new(500, "empty chat response"))
 }

@@ -1,5 +1,3 @@
-// ── Types ────────────────────────────────────────────────────────────────────
-
 #[derive(serde::Deserialize)]
 pub struct Config {
     pub models: ModelsConfig,
@@ -40,8 +38,6 @@ pub struct StorageConfig {
     pub store_path: String,
 }
 
-// ── Public API ────────────────────────────────────────────────────────────────
-
 pub fn load_config() -> Config {
     let config_str = std::fs::read_to_string("config.json").expect("Failed to read config.json");
     serde_json::from_str(&config_str).expect("Failed to parse config.json")
@@ -68,8 +64,6 @@ impl ModelsConfig {
     }
 }
 
-// ── Private helpers ───────────────────────────────────────────────────────────
-
 fn expand_url_template(
     template: &str,
     llm_model: &str,
@@ -85,8 +79,6 @@ fn expand_url_template(
         .trim_end_matches('/')
         .to_string()
 }
-
-// ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {

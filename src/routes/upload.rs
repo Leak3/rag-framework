@@ -52,7 +52,7 @@ pub async fn upload(
             String::from_utf8_lossy(&upload_req.file).to_string()
         };
 
-        let field_chunks = crate::ingest::chunker::chunk_text_smart_or_fallback(&state.config, &text).await;
+        let field_chunks = crate::ingest::chunker::chunk_document(&state.config, &text).await;
         println!("[upload] {} chunks generated", field_chunks.len());
 
         for (i, chunk) in field_chunks.into_iter().enumerate() {

@@ -14,6 +14,11 @@ pub mod providers;
 pub mod ingest;
 pub mod error;
 
+pub struct AppState {
+    pub store: RwLock<store::VectorStore>,
+    pub config: config::Config,
+}
+
 #[derive(OpenApi)]
 #[openapi(
     paths(
@@ -36,11 +41,6 @@ pub mod error;
 )]
 struct ApiDoc;
 
-pub struct AppState {
-    pub store: RwLock<store::VectorStore>,
-    pub config: config::Config,
-}
-
 pub fn build_app(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/health", get(routes::health::health))
@@ -53,4 +53,3 @@ pub fn build_app(state: Arc<AppState>) -> Router {
         .merge(SwaggerUi::new("/swagger").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .with_state(state)
 }
-
